@@ -237,4 +237,13 @@ def _form_contacto(sb, clientes: list, contacto_existente: dict | None):
                     datos["cliente_id"] = cliente_id
                     sb.table("contactos_cliente").insert(datos).execute()
                     st.success(f"✅ Contacto {nombre} {apellido} creado.")
+                    try:
+                        from utils.notificaciones import notif_nuevo_contacto
+                        from utils.supabase_client import get_usuario_actual
+                        usuario_act = get_usuario_actual()
+                        if usuario_act:
+                            cli_nombre = next((cl["nombre"] for cl in clientes if cl["id"] == cliente_id), "—")
+                            notif_nuevo_contacto(usuario_act, f"{nombre} {apellido}", cli_nombre)
+                    except Exception:
+                        pass
                 st.rerun()

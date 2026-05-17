@@ -485,6 +485,19 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                 except Exception as e:
                     st.warning(f"No se pudo subir {f.name}: {e}")
 
+            # Notificación Telegram
+            try:
+                from utils.notificaciones import notif_nueva_reunion
+                cliente_nombre = next((c["nombre"] for c in get_clientes_usuario(usuario_id) if c["id"] == cliente_id), "")
+                notif_nueva_reunion(
+                    usuario=sb.table("usuarios_atento").select("*").eq("id", usuario_id).execute().data[0],
+                    cliente=cliente_nombre,
+                    tipo=tipo_reunion,
+                    fecha=str(fecha),
+                )
+            except Exception:
+                pass
+
             # Limpiar estado
             st.session_state.form_items   = []
             st.session_state.form_adjuntos = []

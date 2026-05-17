@@ -205,6 +205,16 @@ def _actualizar_estado(sb, item_id: str, nuevo_estado: str):
     if nuevo_estado == "resuelto":
         update["fecha_cierre"] = str(date.today())
     sb.table("items_seguimiento").update(update).eq("id", item_id).execute()
+    try:
+        from utils.notificaciones import notif_item_actualizado
+        import streamlit as st2
+        usuario = st.session_state.get("usuario", {})
+        item = sb.table("items_seguimiento").select("tipo, descripcion, reuniones(clientes(nombre))").eq("id", item_id).execute().data
+        if item:
+            cliente = ((item[0].get("reuniones") or {}).get("clientes") or {}).get("nombre", "—")
+            notif_item_actualizado(usuario, item[0]["tipo"], item[0]["descripcion"], nuevo_estado, cliente)
+    except Exception:
+        pass
     st.rerun()
 
 
