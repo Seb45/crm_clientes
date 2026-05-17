@@ -128,28 +128,28 @@ with st.sidebar:
 
 # ── Routing de páginas ───────────────────────────────────────
 if pagina == "dashboard":
-    from pages import dashboard
+    from modulos import dashboard
     dashboard.show(usuario)
 
 elif pagina == "nueva_reunion":
-    from pages import nueva_reunion
+    from modulos import nueva_reunion
     nueva_reunion.show(usuario)
 
 elif pagina == "bitacora":
-    from pages import bitacora
+    from modulos import bitacora
     bitacora.show(usuario)
 
 elif pagina == "pendientes":
-    from pages import pendientes
+    from modulos import pendientes
     pendientes.show(usuario)
 
 elif pagina == "contactos":
-    from pages import contactos
+    from modulos import contactos
     contactos.show(usuario)
 
 elif pagina == "admin":
     if is_admin():
-        from pages import admin
+        from modulos import admin
         admin.show(usuario)
     else:
         st.error("Acceso denegado.")
