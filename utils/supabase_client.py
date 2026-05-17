@@ -55,6 +55,13 @@ def is_logged_in():
 
 def logout():
     """Cierra sesión limpiando el estado."""
+    try:
+        usuario = st.session_state.get("usuario")
+        if usuario:
+            from utils.notificaciones import notif_logout
+            notif_logout(usuario)
+    except Exception:
+        pass
     for key in list(st.session_state.keys()):
         del st.session_state[key]
     st.rerun()

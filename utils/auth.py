@@ -77,6 +77,8 @@ def _handle_login(email: str, password: str):
 
         st.session_state["usuario"]    = usuario
         st.session_state["session_id"] = session_id
+        from utils.notificaciones import notif_login
+        notif_login(usuario)
         st.rerun()
 
     except Exception as e:
