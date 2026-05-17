@@ -40,6 +40,17 @@ st.markdown("""
 [data-testid="stSidebar"] * {
     color: white !important;
 }
+/* Botón cerrar sesión siempre visible */
+[data-testid="stSidebar"] .stButton > button {
+    background: rgba(255,255,255,0.15) !important;
+    border: 1px solid rgba(255,255,255,0.4) !important;
+    color: white !important;
+    font-weight: 600 !important;
+}
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: rgba(255,255,255,0.25) !important;
+    border-color: rgba(255,255,255,0.7) !important;
+}
 [data-testid="stSidebar"] .stRadio label {
     font-size: 15px;
     padding: 6px 0;
