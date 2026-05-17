@@ -55,7 +55,12 @@ def _handle_login(email: str, password: str):
     sb = get_supabase()
     try:
         result = sb.table("usuarios_atento").select("*").eq("email", email).execute()
+        # Debug temporal
+        st.info(f"Debug — email buscado: [{email}] | registros encontrados: {len(result.data)} | error: {result.error if hasattr(result, 'error') else 'ninguno'}")
         if not result.data:
+            # Intentar traer todos y filtrar en Python
+            todos = sb.table("usuarios_atento").select("id, email, nombre, activo, password_hash").execute()
+            st.info(f"Todos los usuarios: {[u['email'] for u in todos.data]}")
             st.error("Usuario no encontrado.")
             return
 
