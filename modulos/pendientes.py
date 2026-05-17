@@ -207,12 +207,12 @@ def _actualizar_estado(sb, item_id: str, nuevo_estado: str):
     sb.table("items_seguimiento").update(update).eq("id", item_id).execute()
     try:
         from utils.notificaciones import notif_item_actualizado
-        import streamlit as st2
         usuario = st.session_state.get("usuario", {})
-        item = sb.table("items_seguimiento").select("tipo, descripcion, reuniones(clientes(nombre))").eq("id", item_id).execute().data
-        if item:
-            cliente = ((item[0].get("reuniones") or {}).get("clientes") or {}).get("nombre", "—")
-            notif_item_actualizado(usuario, item[0]["tipo"], item[0]["descripcion"], nuevo_estado, cliente)
+        item_data = sb.table("items_seguimiento")            .select("*, reuniones(fecha, clientes(nombre))")            .eq("id", item_id).execute().data
+        if item_data:
+            item_full = item_data[0]
+            cliente = ((item_full.get("reuniones") or {}).get("clientes") or {}).get("nombre", "—")
+            notif_item_actualizado(usuario, item_full, cliente)
     except Exception:
         pass
     st.rerun()

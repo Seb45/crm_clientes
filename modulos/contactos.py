@@ -243,7 +243,7 @@ def _form_contacto(sb, clientes: list, contacto_existente: dict | None):
                         usuario_act = get_usuario_actual()
                         if usuario_act:
                             cli_nombre = next((cl["nombre"] for cl in clientes if cl["id"] == cliente_id), "—")
-                            notif_nuevo_contacto(usuario_act, f"{nombre} {apellido}", cli_nombre)
+                            notif_nuevo_contacto(usuario_act, datos, cli_nombre)
                     except Exception:
                         pass
                 st.rerun()

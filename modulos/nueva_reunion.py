@@ -511,15 +511,53 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                 except Exception as e:
                     st.warning(f"No se pudo subir {f.name}: {e}")
 
-            # Notificación Telegram
+            # Notificación Telegram — detalle completo
             try:
                 from utils.notificaciones import notif_nueva_reunion
                 cliente_nombre = next((c["nombre"] for c in get_clientes_usuario(usuario_id) if c["id"] == cliente_id), "")
+                usuario_data = sb.table("usuarios_atento").select("*").eq("id", usuario_id).execute().data[0]
+
+                # Cargar asistentes cliente
+                asis_cli_data = []
+                if asistentes_cliente_ids:
+                    asis_cli_data = sb.table("contactos_cliente")                        .select("nombre, apellido, cargo")                        .in_("id", asistentes_cliente_ids).execute().data
+
+                # Cargar asistentes Atento
+                asis_aten_data = []
+                if asistentes_atento_ids:
+                    asis_aten_data = sb.table("usuarios_atento")                        .select("nombre, apellido")                        .in_("id", asistentes_atento_ids).execute().data
+
+                # Items cargados en el formulario
+                items_notif = [i for i in st.session_state.get("form_items", []) if i.get("descripcion")]
+
+                # Adjuntos
+                adjuntos_notif = []
+                for adj in st.session_state.get("form_adjuntos", []):
+                    if adj.get("url"):
+                        adjuntos_notif.append({"tipo": "link", "nombre": adj.get("nombre") or adj["url"]})
+                for f in st.session_state.get("pending_files", []):
+                    adjuntos_notif.append({"tipo": "archivo", "nombre": f.name})
+
+                # Programa
+                prog_nombre = None
+                if programa_id:
+                    prog_res = sb.table("programas").select("nombre").eq("id", programa_id).execute().data
+                    if prog_res:
+                        prog_nombre = prog_res[0]["nombre"]
+
                 notif_nueva_reunion(
-                    usuario=sb.table("usuarios_atento").select("*").eq("id", usuario_id).execute().data[0],
+                    usuario=usuario_data,
                     cliente=cliente_nombre,
                     tipo=tipo_reunion,
                     fecha=str(fecha),
+                    hora=str(hora) if hora else None,
+                    programa=prog_nombre,
+                    calificacion=calificacion,
+                    observaciones=observaciones,
+                    asistentes_cliente=asis_cli_data,
+                    asistentes_atento=asis_aten_data,
+                    items=items_notif,
+                    adjuntos=adjuntos_notif,
                 )
             except Exception:
                 pass
