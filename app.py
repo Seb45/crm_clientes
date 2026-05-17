@@ -114,6 +114,7 @@ with st.sidebar:
     }
     if is_admin():
         opciones["⚙️ Administración"] = "admin"
+    opciones["🔑 Cambiar contraseña"] = "cambiar_password"
 
     pagina_sel = st.radio(
         "Navegación",
@@ -153,3 +154,7 @@ elif pagina == "admin":
         admin.show(usuario)
     else:
         st.error("Acceso denegado.")
+
+elif pagina == "cambiar_password":
+    from modulos import cambiar_password
+    cambiar_password.show(usuario)
