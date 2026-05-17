@@ -99,27 +99,30 @@ def show(usuario: dict):
             st.info("No hay reuniones registradas aún.")
         else:
             for r in ultimas_reuniones[:8]:
-                cliente_nombre = _safe_nested(r, "clientes", "nombre") or "—"
-                programa_nombre = _safe_nested(r, "programas", "nombre")
+                cliente_nombre  = _safe_nested(r, "clientes", "nombre") or "—"
+                programa_nombre = _safe_nested(r, "programas", "nombre") or ""
                 usuario_nombre  = _safe_nested(r, "usuarios_atento", "nombre") or ""
-                calific_html    = CALIFICACION_HTML.get(r.get("calificacion", "neutra"), "")
+                calificacion    = r.get("calificacion", "neutra")
                 fecha_str       = r.get("fecha", "")
                 tipo            = r.get("tipo_reunion", "")
 
-                st.markdown(f"""
-                <div class="card">
-                    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-                        <div>
-                            <b style="font-size:15px;">{cliente_nombre}</b>
-                            {f'<span style="font-size:12px;color:#6b7280;"> · {programa_nombre}</span>' if programa_nombre else ''}
-                        </div>
-                        {calific_html}
-                    </div>
-                    <div style="font-size:12px;color:#6b7280;margin-top:6px;">
-                        📅 {fecha_str} &nbsp;·&nbsp; {tipo} &nbsp;·&nbsp; 👤 {usuario_nombre}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                # Construir partes del HTML por separado para evitar f-string anidados
+                cal_icon  = {"positiva": "✅", "neutra": "➖", "negativa": "❌"}.get(calificacion, "➖")
+                cal_label = calificacion.capitalize()
+                cal_color = {"positiva": "#dcfce7;color:#166534", "neutra": "#fef9c3;color:#854d0e", "negativa": "#fee2e2;color:#991b1b"}.get(calificacion, "#fef9c3;color:#854d0e")
+                prog_html = f'<span style="font-size:12px;color:#6b7280;"> · {programa_nombre}</span>' if programa_nombre else ""
+
+                html = (
+                    f'<div class="card">'
+                    f'<div style="display:flex;justify-content:space-between;align-items:flex-start;">'
+                    f'<div><b style="font-size:15px;">{cliente_nombre}</b>{prog_html}</div>'
+                    f'<span style="background:{cal_color};padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;">{cal_icon} {cal_label}</span>'
+                    f'</div>'
+                    f'<div style="font-size:12px;color:#6b7280;margin-top:6px;">'
+                    f'📅 {fecha_str} &nbsp;·&nbsp; {tipo} &nbsp;·&nbsp; 👤 {usuario_nombre}'
+                    f'</div></div>'
+                )
+                st.markdown(html, unsafe_allow_html=True)
 
     # ── Items pendientes recientes ───────────────────────────
     if items_pendientes:
