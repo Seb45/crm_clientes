@@ -391,11 +391,20 @@ def _seccion_adjuntos(cliente_nombre: str = ""):
 
     st.markdown("**Archivos**")
     uploaded_files = st.file_uploader(
-        "Subir archivos (PDF, PPT, Word, Excel, imágenes, emails)",
+        "Subir archivos (PDF, PPT, Word, Excel, imágenes, emails) · Máx. 50MB por archivo",
         accept_multiple_files=True,
         type=["pdf","ppt","pptx","doc","docx","png","jpg","jpeg","gif","msg","eml","txt","xlsx","xls"],
         key="file_uploader"
     )
+    # Validar tamaño máximo 50MB
+    if uploaded_files:
+        archivos_ok = []
+        for uf in uploaded_files:
+            if uf.size > 50 * 1024 * 1024:
+                st.warning(f"⚠️ {uf.name} supera los 50MB y no será subido.")
+            else:
+                archivos_ok.append(uf)
+        uploaded_files = archivos_ok
     if uploaded_files:
         st.caption(f"✅ {len(uploaded_files)} archivo(s) listos para subir al guardar.")
         st.session_state["pending_files"] = uploaded_files
@@ -466,7 +475,11 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                     import requests as req
                     from supabase import create_client
                     file_bytes = f.read()
-                    safe_name  = f.name.replace(" ", "_")
+                    import unicodedata
+                    # Normalizar: quitar acentos, reemplazar espacios y caracteres especiales
+                    nombre_norm = unicodedata.normalize('NFD', f.name)
+                    nombre_norm = ''.join(c for c in nombre_norm if unicodedata.category(c) != 'Mn')
+                    safe_name   = nombre_norm.replace(" ", "_").replace("(", "").replace(")", "").replace(",", "").replace(";", "").replace("'", "").replace('"', "")
                     path       = f"reuniones/{reunion_id}/{safe_name}"
                     supabase_url = st.secrets["SUPABASE_URL"]
                     anon_key     = st.secrets["SUPABASE_ANON_KEY"]
