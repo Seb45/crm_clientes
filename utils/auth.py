@@ -96,64 +96,37 @@ def login_page():
     # ── UI de login ──────────────────────────────────────────
     st.markdown("""
         <style>
-        .login-container {
-            max-width: 420px;
-            margin: 80px auto 0 auto;
-            padding: 40px;
-            background: #ffffff;
-            border-radius: 16px;
-            box-shadow: 0 4px 24px rgba(0,0,0,0.10);
-            text-align: center;
-        }
-        .login-logo {
-            font-size: 48px;
-            margin-bottom: 8px;
-        }
-        .login-title {
-            font-size: 26px;
-            font-weight: 700;
-            color: #1a3c5e;
-            margin-bottom: 4px;
-        }
-        .login-subtitle {
-            font-size: 14px;
-            color: #6b7280;
-            margin-bottom: 32px;
-        }
-        .stButton > button {
-            width: 100%;
-            background: #ffffff;
-            border: 2px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 12px 24px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #374151;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .stButton > button:hover {
-            background: #f9fafb;
-            border-color: #1a3c5e;
-        }
+        .block-container { padding-top: 80px !important; }
         </style>
     """, unsafe_allow_html=True)
 
-    col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2, col3 = st.columns([1, 1.4, 1])
     with col2:
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        st.markdown('<div class="login-logo">📋</div>', unsafe_allow_html=True)
-        st.markdown('<div class="login-title">Bitácora Atento</div>', unsafe_allow_html=True)
-        st.markdown('<div class="login-subtitle">Sistema de seguimiento de reuniones</div>', unsafe_allow_html=True)
+        st.markdown(
+            "<div style='text-align:center;padding:40px 32px 32px 32px;"
+            "background:#ffffff;border-radius:16px;"
+            "box-shadow:0 4px 24px rgba(0,0,0,0.10);'>"
+            "<div style='font-size:52px;margin-bottom:8px;'>📋</div>"
+            "<div style='font-size:26px;font-weight:700;color:#1a3c5e;margin-bottom:4px;'>Bitácora Atento</div>"
+            "<div style='font-size:14px;color:#6b7280;margin-bottom:28px;'>Sistema de seguimiento de reuniones</div>"
+            "</div>",
+            unsafe_allow_html=True
+        )
 
         # Generar URL OAuth de Supabase con Google
         supabase_url = st.secrets["SUPABASE_URL"]
         redirect_url = st.secrets.get("REDIRECT_URL", "http://localhost:8501")
         oauth_url = f"{supabase_url}/auth/v1/authorize?provider=google&redirect_to={redirect_url}"
 
+        st.markdown("<div style='margin-top:16px;'>", unsafe_allow_html=True)
         st.link_button("🔵  Ingresar con Google", oauth_url, use_container_width=True)
-        st.markdown('<div style="margin-top:16px;font-size:12px;color:#9ca3af;">Acceso exclusivo con cuenta Google corporativa</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            "<div style='text-align:center;margin-top:12px;font-size:12px;color:#9ca3af;'>"
+            "Ingresá con tu cuenta Google personal o de trabajo"
+            "</div>",
+            unsafe_allow_html=True
+        )
 
     # ── Procesar callback OAuth ──────────────────────────────
     # Supabase redirige con #access_token en el fragment (manejado via JS)
