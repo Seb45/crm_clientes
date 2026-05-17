@@ -456,8 +456,9 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                         "x-upsert": "true",
                     }
                     resp = req.post(upload_url, headers=headers, data=file_bytes, timeout=60)
+                    st.info(f"DEBUG upload → URL: {upload_url} | status: {resp.status_code} | resp: {resp.text[:200]}")
                     if resp.status_code not in (200, 201):
-                        st.warning(f"No se pudo subir {f.name}: {resp.text[:100]}")
+                        st.warning(f"No se pudo subir {f.name}: {resp.text[:200]}")
                         continue
                     # URL pública directa (bucket público)
                     public_url = f"{supabase_url}/storage/v1/object/public/adjuntos-reuniones/{path}"
