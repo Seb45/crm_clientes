@@ -1,6 +1,7 @@
 """
 utils/auth.py
-Autenticación Google OAuth via Supabase + control de sesión única
+Autenticación Google OAuth via Supabase - flujo PKCE
+El code llega como ?code= en la URL, Streamlit lo lee directamente.
 """
 
 import sys
@@ -8,11 +9,25 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import streamlit as st
-import streamlit.components.v1 as components
 import requests
 import uuid
+import hashlib
+import base64
+import secrets
 from utils.supabase_client import get_supabase, init_session
 
+
+# ── PKCE helpers ────────────────────────────────────────────
+
+def _generate_code_verifier() -> str:
+    return base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b'=').decode()
+
+def _generate_code_challenge(verifier: str) -> str:
+    digest = hashlib.sha256(verifier.encode()).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b'=').decode()
+
+
+# ── User management ─────────────────────────────────────────
 
 def check_and_register_user(google_email: str, google_name: str, auth_uid: str) -> dict | None:
     sb = get_supabase()
@@ -58,6 +73,8 @@ def is_session_valid(usuario_id: str, session_id: str) -> bool:
         return True
 
 
+# ── Login page ───────────────────────────────────────────────
+
 def login_page():
     init_session()
 
@@ -66,39 +83,41 @@ def login_page():
 
     params = st.query_params
 
-    # Flujo 2: token ya capturado y reenviado como query param
-    if "access_token" in params:
-        _handle_token(params["access_token"])
+    # ── Flujo PKCE: llegó el ?code= ──────────────────────────
+    if "code" in params:
+        _handle_pkce_callback(params["code"])
         return False
 
-    # Flujo 1: mostrar UI + JS que captura el fragment
+    # ── Error devuelto por Supabase/Google ───────────────────
+    if "error" in params:
+        st.error(f"Error de autenticación: {params.get('error_description', params['error'])}")
+        if st.button("Reintentar"):
+            st.query_params.clear()
+            st.rerun()
+        return False
+
+    # ── Generar PKCE y URL de login ──────────────────────────
+    if "pkce_verifier" not in st.session_state:
+        st.session_state["pkce_verifier"] = _generate_code_verifier()
+
+    verifier   = st.session_state["pkce_verifier"]
+    challenge  = _generate_code_challenge(verifier)
+
     supabase_url = st.secrets["SUPABASE_URL"]
+    anon_key     = st.secrets["SUPABASE_ANON_KEY"]
     redirect_url = st.secrets.get("REDIRECT_URL", "http://localhost:8501")
-    oauth_url = f"{supabase_url}/auth/v1/authorize?provider=google&redirect_to={redirect_url}"
 
-    # JS via components.html (sí ejecuta scripts, a diferencia de st.markdown)
-    components.html("""
-        <script>
-        (function() {
-            var hash = window.parent.location.hash;
-            if (hash && hash.includes('access_token')) {
-                var params = new URLSearchParams(hash.substring(1));
-                var token = params.get('access_token');
-                if (token) {
-                    window.parent.location.href =
-                        window.parent.location.pathname + '?access_token=' + encodeURIComponent(token);
-                }
-            }
-        })();
-        </script>
-    """, height=0)
+    oauth_url = (
+        f"{supabase_url}/auth/v1/authorize"
+        f"?provider=google"
+        f"&redirect_to={redirect_url}"
+        f"&code_challenge={challenge}"
+        f"&code_challenge_method=S256"
+        f"&response_type=code"
+    )
 
-    # UI de login
-    st.markdown("""
-        <style>
-        .block-container { padding-top: 60px !important; }
-        </style>
-    """, unsafe_allow_html=True)
+    # ── UI ────────────────────────────────────────────────────
+    st.markdown("<style>.block-container{padding-top:60px!important;}</style>", unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 1.4, 1])
     with col2:
@@ -123,30 +142,67 @@ def login_page():
     return False
 
 
-def _handle_token(access_token: str):
+# ── PKCE callback handler ────────────────────────────────────
+
+def _handle_pkce_callback(code: str):
     supabase_url = st.secrets["SUPABASE_URL"]
-    anon_key = st.secrets["SUPABASE_ANON_KEY"]
+    anon_key     = st.secrets["SUPABASE_ANON_KEY"]
+    redirect_url = st.secrets.get("REDIRECT_URL", "http://localhost:8501")
+    verifier     = st.session_state.get("pkce_verifier", "")
 
     with st.spinner("Iniciando sesión..."):
         try:
-            resp = requests.get(
-                f"{supabase_url}/auth/v1/user",
-                headers={"apikey": anon_key, "Authorization": f"Bearer {access_token}"},
-                timeout=10
+            # Intercambiar code + verifier por tokens
+            resp = requests.post(
+                f"{supabase_url}/auth/v1/token?grant_type=pkce",
+                headers={
+                    "apikey": anon_key,
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={
+                    "auth_code": code,
+                    "code_verifier": verifier,
+                    "redirect_uri": redirect_url,
+                },
+                timeout=15
             )
+
             if resp.status_code != 200:
-                st.error("Token inválido o expirado. Cerrá esta pestaña e ingresá de nuevo.")
+                # Fallback: intentar con JSON body
+                resp2 = requests.post(
+                    f"{supabase_url}/auth/v1/token?grant_type=pkce",
+                    headers={
+                        "apikey": anon_key,
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "auth_code": code,
+                        "code_verifier": verifier,
+                    },
+                    timeout=15
+                )
+                if resp2.status_code == 200:
+                    resp = resp2
+                else:
+                    st.error(f"Error al obtener token ({resp.status_code}): {resp.text[:200]}")
+                    st.query_params.clear()
+                    return
+
+            token_data = resp.json()
+
+            if "access_token" not in token_data:
+                st.error(f"Respuesta inesperada de Supabase: {str(token_data)[:200]}")
                 st.query_params.clear()
-                st.rerun()
                 return
 
-            user_data = resp.json()
-            email    = user_data.get("email", "")
-            name     = user_data.get("user_metadata", {}).get("full_name", email)
-            auth_uid = user_data.get("id", "")
+            access_token = token_data["access_token"]
+            user_data    = token_data.get("user", {})
+            email        = user_data.get("email", "")
+            name         = user_data.get("user_metadata", {}).get("full_name", email)
+            auth_uid     = user_data.get("id", "")
 
             if not email:
-                st.error("No se pudo obtener el email de Google.")
+                st.error("No se pudo obtener el email de tu cuenta Google.")
                 st.query_params.clear()
                 return
 
@@ -154,24 +210,27 @@ def _handle_token(access_token: str):
 
             if usuario is None:
                 st.warning("⚠️ Tu acceso está pendiente de activación.")
-                st.info(f"Email: **{email}**  \nComunicate con el administrador para activar tu cuenta.")
+                st.info(f"Email registrado: **{email}**  \nContactá al administrador para activar tu cuenta.")
                 st.query_params.clear()
                 return
 
             session_id = str(uuid.uuid4())
             invalidate_other_sessions(usuario["id"], session_id)
 
-            st.session_state["usuario"]    = usuario
-            st.session_state["auth_token"] = access_token
-            st.session_state["session_id"] = session_id
+            st.session_state["usuario"]      = usuario
+            st.session_state["auth_token"]   = access_token
+            st.session_state["session_id"]   = session_id
+            st.session_state.pop("pkce_verifier", None)
 
             st.query_params.clear()
             st.rerun()
 
         except Exception as e:
-            st.error(f"Error al iniciar sesión: {str(e)}")
+            st.error(f"Error inesperado: {str(e)}")
             st.query_params.clear()
 
+
+# ── Require auth ─────────────────────────────────────────────
 
 def require_auth():
     init_session()
