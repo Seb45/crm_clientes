@@ -390,11 +390,7 @@ def _seccion_adjuntos(cliente_nombre: str = ""):
         st.rerun()
 
     st.markdown("**Archivos**")
-    st.info(
-        "📁 Para adjuntar archivos, subí el documento a tu OneDrive/SharePoint y pegá el link arriba.  
-"
-        "El acceso quedará controlado por los permisos que ya tenés configurados en Microsoft 365."
-    )
+    st.info("📁 Subí el archivo a la carpeta del cliente en SharePoint y pegá el link arriba. El acceso queda controlado por los permisos de Microsoft 365.")
     st.session_state["pending_files"] = []
 
 
