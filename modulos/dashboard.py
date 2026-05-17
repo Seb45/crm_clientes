@@ -37,7 +37,13 @@ TIPO_ICONO = {
 
 def show(usuario: dict):
     st.markdown(f"## 🏠 Dashboard")
-    st.markdown(f"Bienvenido, **{usuario['nombre']}** — {date.today().strftime('%A %d de %B de %Y')}")
+    
+    import locale
+    DIAS_ES   = ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"]
+    MESES_ES  = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"]
+    hoy = date.today()
+    fecha_es  = f"{DIAS_ES[hoy.weekday()]} {hoy.day} de {MESES_ES[hoy.month-1]} de {hoy.year}"
+    st.markdown(f"Bienvenido, **{usuario['nombre']}** — {fecha_es}")
     st.divider()
 
     usuario_id = usuario["id"]
@@ -77,7 +83,7 @@ def show(usuario: dict):
                 st.markdown(f"""
                 <div class="card card-alerta">
                     <b>{c['nombre']}</b>
-                    <div style="font-size:12px;color:#6b7280;margin-top:4px;">Sin reunión en {date.today().strftime('%B %Y')}</div>
+                    <div style="font-size:12px;color:#6b7280;margin-top:4px;">{MESES_ES[date.today().month-1].capitalize()} {date.today().year}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
