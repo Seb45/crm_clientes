@@ -442,19 +442,31 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
 
             for f in st.session_state.get("pending_files", []):
                 try:
+                    import requests as req
                     file_bytes = f.read()
                     path = f"reuniones/{reunion_id}/{f.name}"
-                    sb.storage.from_("adjuntos-reuniones").upload(
-                        path, file_bytes,
-                        file_options={"content-type": f.type or "application/octet-stream"}
-                    )
-                    signed = sb.storage.from_("adjuntos-reuniones").create_signed_url(path, 86400 * 30)
+                    supabase_url = st.secrets["SUPABASE_URL"]
+                    service_key  = st.secrets["SUPABASE_SERVICE_KEY"]
+                    # Upload via REST directo con service key
+                    upload_url = f"{supabase_url}/storage/v1/object/adjuntos-reuniones/{path}"
+                    headers = {
+                        "Authorization": f"Bearer {service_key}",
+                        "apikey": service_key,
+                        "Content-Type": f.type or "application/octet-stream",
+                        "x-upsert": "true",
+                    }
+                    resp = req.post(upload_url, headers=headers, data=file_bytes, timeout=60)
+                    if resp.status_code not in (200, 201):
+                        st.warning(f"No se pudo subir {f.name}: {resp.text[:100]}")
+                        continue
+                    # URL pública directa (bucket público)
+                    public_url = f"{supabase_url}/storage/v1/object/public/adjuntos-reuniones/{path}"
                     sb.table("adjuntos").insert({
-                        "reunion_id":    reunion_id,
-                        "tipo":          "archivo",
-                        "nombre":        f.name,
-                        "storage_path":  path,
-                        "url":           signed.get("signedURL", ""),
+                        "reunion_id":   reunion_id,
+                        "tipo":         "archivo",
+                        "nombre":       f.name,
+                        "storage_path": path,
+                        "url":          public_url,
                     }).execute()
                 except Exception as e:
                     st.warning(f"No se pudo subir {f.name}: {e}")
