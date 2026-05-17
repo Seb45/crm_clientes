@@ -26,6 +26,16 @@ CALIFICACIONES = {
     "❌ Negativa": "negativa",
 }
 
+# Links de SharePoint por cliente
+SHAREPOINT_LINKS = {
+    "TMA (Telefónica)": {
+        "base": "https://atentoglobal-my.sharepoint.com/:f:/r/personal/scedermas_ar_atento_com/Documents/Bitacora%20Delivery/TMA?csf=1&web=1&e=MEaOAU",
+        "reuniones": "https://atentoglobal-my.sharepoint.com/:f:/r/personal/scedermas_ar_atento_com/Documents/Bitacora%20Delivery/TMA/Reuniones?csf=1&web=1&e=MEaOAU",
+        "documentos": "https://atentoglobal-my.sharepoint.com/:f:/r/personal/scedermas_ar_atento_com/Documents/Bitacora%20Delivery/TMA/Documentos?csf=1&web=1&e=MEaOAU",
+    },
+    # Agregar más clientes acá cuando estén disponibles
+}
+
 # Programas fijos por cliente (además de los de la BD)
 PROGRAMAS_FIJOS = {
     "TMA (Telefónica)": ["B2B Atención", "B2B Ventas", "B2C Atención", "B2C Televentas", "Otros"],
@@ -191,7 +201,7 @@ def show(usuario: dict):
     # ══════════════════════════════════════════════════════════
     st.markdown("---")
     st.markdown("### 📎 Adjuntos")
-    _seccion_adjuntos()
+    _seccion_adjuntos(cliente_sel_nombre)
 
     # ══════════════════════════════════════════════════════════
     # BOTÓN GUARDAR
@@ -345,7 +355,19 @@ def _seccion_items():
 
 # ── Sección adjuntos ─────────────────────────────────────────
 
-def _seccion_adjuntos():
+def _seccion_adjuntos(cliente_nombre: str = ""):
+    # Mostrar acceso directo a SharePoint si existe para este cliente
+    if cliente_nombre in SHAREPOINT_LINKS:
+        links_sp = SHAREPOINT_LINKS[cliente_nombre]
+        st.markdown(
+            f"📁 **Carpeta SharePoint — {cliente_nombre}:** &nbsp;"
+            f"[📂 Reuniones]({links_sp['reuniones']}) &nbsp;|&nbsp; "
+            f"[📄 Documentos]({links_sp['documentos']})",
+            unsafe_allow_html=True
+        )
+        st.caption("Subí el archivo a SharePoint y pegá el link en el campo de abajo.")
+        st.divider()
+
     st.markdown("**Links (URLs)**")
     links = [a for a in st.session_state.form_adjuntos if a["tipo"] == "link"]
     for adj in links:
@@ -368,18 +390,12 @@ def _seccion_adjuntos():
         st.rerun()
 
     st.markdown("**Archivos**")
-    uploaded_files = st.file_uploader(
-        "Subir archivos",
-        accept_multiple_files=True,
-        type=["pdf", "ppt", "pptx", "doc", "docx", "png", "jpg", "jpeg", "gif", "msg", "eml", "txt", "xlsx", "xls"],
-        key="file_uploader",
-        help="PDF, PPT, Word, imágenes, emails (.msg, .eml), Excel"
+    st.info(
+        "📁 Para adjuntar archivos, subí el documento a tu OneDrive/SharePoint y pegá el link arriba.  
+"
+        "El acceso quedará controlado por los permisos que ya tenés configurados en Microsoft 365."
     )
-    if uploaded_files:
-        st.caption(f"✅ {len(uploaded_files)} archivo(s) listos para subir al guardar.")
-        st.session_state["pending_files"] = uploaded_files
-    else:
-        st.session_state["pending_files"] = []
+    st.session_state["pending_files"] = []
 
 
 # ── Guardar reunión ──────────────────────────────────────────
