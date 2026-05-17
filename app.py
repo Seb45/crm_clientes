@@ -85,12 +85,7 @@ footer {visibility: hidden;}
 # ── Auth ─────────────────────────────────────────────────────
 init_session()
 
-# Verificar si llegamos de callback OAuth
-params = st.query_params
-if "code" in params and not st.session_state.get("usuario"):
-    from utils.auth import _handle_oauth_callback
-    _handle_oauth_callback(params["code"])
-
+# login_page() maneja tanto la UI como el callback via ?access_token
 if not st.session_state.get("usuario"):
     login_page()
     st.stop()
