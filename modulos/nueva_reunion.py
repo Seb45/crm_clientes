@@ -289,9 +289,15 @@ def _seccion_items():
     ICONOS  = {"pedido": "📌", "reclamo": "⚠️", "reconocimiento": "🏆"}
     ESTADOS = ["pendiente", "en_curso", "resuelto"]
 
+    # Cargar equipo Atento para selector de responsable
+    from utils.supabase_client import get_supabase
+    sb = get_supabase()
+    equipo = sb.table("usuarios_atento").select("nombre, apellido").eq("activo", True).order("nombre").execute().data
+    nombres_equipo = [f"{u['nombre']} {u.get('apellido','') or ''}".strip() for u in equipo]
+
     for i, item in enumerate(st.session_state.form_items):
         with st.container(border=True):
-            col1, col2, col3, col4, col5 = st.columns([1.2, 2.5, 1.2, 1.5, 0.5])
+            col1, col2, col3, col5 = st.columns([1.2, 2.5, 1.2, 0.5])
             with col1:
                 tipo = st.selectbox("Tipo", TIPOS, index=TIPOS.index(item["tipo"]),
                                     key=f"item_tipo_{i}",
@@ -305,14 +311,22 @@ def _seccion_items():
                                       key=f"item_estado_{i}",
                                       format_func=lambda e: e.replace("_", " ").capitalize())
                 st.session_state.form_items[i]["estado"] = estado
-            with col4:
-                resp = st.text_input("Responsable", value=item.get("responsable", ""), key=f"item_resp_{i}")
-                st.session_state.form_items[i]["responsable"] = resp
             with col5:
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🗑️", key=f"item_del_{i}", help="Eliminar"):
                     st.session_state.form_items.pop(i)
                     st.rerun()
+
+            # Responsables: multiselect del equipo Atento
+            resp_actual = [r.strip() for r in (item.get("responsable") or "").split(",") if r.strip() and r.strip() in nombres_equipo]
+            resp_sel = st.multiselect(
+                "Responsable(s)",
+                nombres_equipo,
+                default=resp_actual,
+                key=f"item_resp_{i}",
+                placeholder="Seleccioná uno o más..."
+            )
+            st.session_state.form_items[i]["responsable"] = ", ".join(resp_sel)
 
             fc = st.date_input("Fecha compromiso (opcional)", value=None,
                                key=f"item_fc_{i}", min_value=date.today())

@@ -195,13 +195,22 @@ def show(usuario: dict):
         st.divider()
 
         for u in equipo:
-            col1, col2, col3, col4 = st.columns([2, 2, 1.5, 1])
+            col1, col2, col3, col4, col5 = st.columns([2, 2, 1.5, 1, 1])
             with col1: st.markdown(f"{u['nombre']} {u.get('apellido','')}")
             with col2: st.markdown(f"`{u['email']}`")
             with col3: st.markdown(f"`{u['rol']}`")
             with col4:
                 estado = "🟢 Activo" if u["activo"] else "🔴 Inactivo"
                 st.markdown(estado)
+            with col5:
+                if u["id"] != usuario["id"]:
+                    if st.button("🗑️ Eliminar", key=f"del_eq_{u['id']}"):
+                        sb.table("accesos_usuarios").delete().eq("usuario_id", u["id"]).execute()
+                        sb.table("reunion_asistentes_atento").delete().eq("usuario_id", u["id"]).execute()
+                        sb.table("sesiones_activas").delete().eq("usuario_id", u["id"]).execute()
+                        sb.table("usuarios_atento").delete().eq("id", u["id"]).execute()
+                        st.success(f"{u['nombre']} eliminado.")
+                        st.rerun()
 
         # Agregar miembro manual (sin Google login aún)
         st.divider()

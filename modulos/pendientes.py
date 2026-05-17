@@ -37,7 +37,7 @@ def show(usuario: dict):
         filtro_tipo = st.selectbox("Tipo", ["Todos", "pedido", "reclamo", "reconocimiento"],
                                    format_func=lambda t: f"{TIPO_ICONO.get(t, '')} {t.capitalize()}" if t != "Todos" else "Todos")
     with col2:
-        filtro_estado = st.selectbox("Estado", ["pendiente", "en_curso", "Todos (incl. resueltos)"],
+        filtro_estado = st.selectbox("Estado", ["Todos (incl. resueltos)", "pendiente", "en_curso"],
                                      format_func=lambda e: ESTADO_TEXT.get(e, e))
     with col3:
         clientes = get_clientes_usuario(usuario_id)
@@ -169,14 +169,22 @@ def show(usuario: dict):
 
                 # Notas rápidas
                 with st.expander("✏️ Agregar nota / actualizar responsable", expanded=False):
+                    # Cargar equipo para selector
+                    equipo_pend = sb.table("usuarios_atento").select("nombre, apellido").eq("activo", True).order("nombre").execute().data
+                    nombres_eq  = [f"{u['nombre']} {u.get('apellido','') or ''}".strip() for u in equipo_pend]
                     col_n1, col_n2, col_n3 = st.columns([2, 2, 1])
                     with col_n1:
                         nueva_nota = st.text_input("Nota", key=f"nota_{item['id']}", label_visibility="collapsed",
                                                    placeholder="Agregar nota de seguimiento...")
                     with col_n2:
-                        nuevo_resp = st.text_input("Responsable", value=item.get("responsable") or "",
-                                                   key=f"resp_{item['id']}", label_visibility="collapsed",
-                                                   placeholder="Responsable...")
+                        resp_actual_p = [r.strip() for r in (item.get("responsable") or "").split(",") if r.strip() in nombres_eq]
+                        nuevo_resp = st.multiselect(
+                            "Responsable(s)", nombres_eq,
+                            default=resp_actual_p,
+                            key=f"resp_{item['id']}",
+                            placeholder="Seleccioná...",
+                            label_visibility="collapsed"
+                        )
                     with col_n3:
                         if st.button("Guardar", key=f"save_{item['id']}"):
                             update = {}
@@ -184,7 +192,7 @@ def show(usuario: dict):
                                 notas_prev = item.get("notas_seguimiento") or ""
                                 update["notas_seguimiento"] = f"{notas_prev}\n[{date.today()}] {nueva_nota}".strip()
                             if nuevo_resp:
-                                update["responsable"] = nuevo_resp
+                                update["responsable"] = ", ".join(nuevo_resp)
                             if update:
                                 sb.table("items_seguimiento").update(update).eq("id", item["id"]).execute()
                                 st.rerun()
