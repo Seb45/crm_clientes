@@ -1,13 +1,13 @@
 """
-pages/nueva_reunion.py
-Formulario completo de carga de reunión
+modulos/nueva_reunion.py
+Formulario completo de carga de reunión — v2
 """
 
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
-from datetime import date, datetime
+from datetime import date, datetime, time
 import uuid
 from utils.supabase_client import get_supabase, get_clientes_usuario
 
@@ -22,8 +22,14 @@ TIPOS_REUNION = [
 
 CALIFICACIONES = {
     "✅ Positiva": "positiva",
-    "➖ Neutra": "neutra",
+    "➖ Neutra":   "neutra",
     "❌ Negativa": "negativa",
+}
+
+# Programas fijos por cliente (además de los de la BD)
+PROGRAMAS_FIJOS = {
+    "TMA (Telefónica)": ["B2B Atención", "B2B Ventas", "B2C Atención", "B2C Televentas", "Otros"],
+    "Renault":          ["Courtage", "Plan Rombo", "Customer", "Otros"],
 }
 
 
@@ -34,7 +40,6 @@ def show(usuario: dict):
     sb = get_supabase()
     usuario_id = usuario["id"]
 
-    # ── Cargar datos base ────────────────────────────────────
     clientes = get_clientes_usuario(usuario_id)
     if not clientes:
         st.warning("No tenés clientes asignados. Contactá al administrador.")
@@ -45,16 +50,15 @@ def show(usuario: dict):
         .eq("activo", True)\
         .order("nombre").execute().data
 
-    # ── Estado del formulario ────────────────────────────────
     if "form_items" not in st.session_state:
-        st.session_state.form_items = []   # items de seguimiento
+        st.session_state.form_items = []
     if "form_adjuntos" not in st.session_state:
         st.session_state.form_adjuntos = []
     if "nuevo_contacto_mode" not in st.session_state:
         st.session_state.nuevo_contacto_mode = False
 
     # ══════════════════════════════════════════════════════════
-    # SECCIÓN 1: Datos generales de la reunión
+    # SECCIÓN 1: Datos generales
     # ══════════════════════════════════════════════════════════
     st.markdown("### 📌 Datos generales")
     col1, col2 = st.columns(2)
@@ -64,14 +68,28 @@ def show(usuario: dict):
         cliente_sel_nombre = st.selectbox("Cliente *", cliente_nombres)
         cliente_sel = next(c for c in clientes if c["nombre"] == cliente_sel_nombre)
 
-        # Programa (solo si el cliente tiene programas)
-        programa_id = None
-        if cliente_sel.get("tiene_programas"):
-            programas = sb.table("programas")\
-                .select("*")\
+        # Programas: primero fijos por cliente, luego los de la BD
+        programa_id  = None
+        programa_txt = None  # para clientes con programas fijos (no en BD)
+
+        if cliente_sel_nombre in PROGRAMAS_FIJOS:
+            # Programas fijos hardcodeados
+            prog_opciones = ["(Sin programa específico)"] + PROGRAMAS_FIJOS[cliente_sel_nombre]
+            prog_sel = st.selectbox("Programa", prog_opciones)
+            if prog_sel != "(Sin programa específico)":
+                programa_txt = prog_sel
+                # Buscar si existe en BD, si no ignorar ID
+                progs_bd = sb.table("programas").select("*")\
+                    .eq("cliente_id", cliente_sel["id"])\
+                    .eq("nombre", prog_sel).execute().data
+                if progs_bd:
+                    programa_id = progs_bd[0]["id"]
+
+        elif cliente_sel.get("tiene_programas"):
+            # Programas dinámicos desde BD
+            programas = sb.table("programas").select("*")\
                 .eq("cliente_id", cliente_sel["id"])\
-                .eq("activo", True)\
-                .execute().data
+                .eq("activo", True).execute().data
             if programas:
                 prog_nombres = ["(Sin programa específico)"] + [p["nombre"] for p in programas]
                 prog_sel = st.selectbox("Programa", prog_nombres)
@@ -82,7 +100,11 @@ def show(usuario: dict):
 
     with col2:
         tipo_reunion = st.selectbox("Tipo de reunión *", TIPOS_REUNION)
-        hora_str = st.time_input("Hora", value=None)
+
+        # Hora: default hora actual
+        hora_actual = datetime.now().time().replace(second=0, microsecond=0)
+        hora_str = st.time_input("Hora", value=hora_actual)
+
         calific_label = st.radio(
             "Calificación para Atento *",
             list(CALIFICACIONES.keys()),
@@ -100,7 +122,6 @@ def show(usuario: dict):
 
     with col_cli:
         st.markdown("**Asistentes del cliente**")
-
         contactos = sb.table("contactos_cliente")\
             .select("id, nombre, apellido, cargo")\
             .eq("cliente_id", cliente_sel["id"])\
@@ -123,17 +144,15 @@ def show(usuario: dict):
         else:
             st.info("No hay contactos cargados para este cliente.")
 
-        # Botón para agregar nuevo contacto
         if st.button("➕ Agregar nuevo contacto del cliente", type="secondary"):
             st.session_state.nuevo_contacto_mode = True
 
     with col_aten:
         st.markdown("**Asistentes de Atento**")
         usuario_opciones = {
-            f"{u['nombre']} {u.get('apellido', '')}": u["id"]
+            f"{u['nombre']} {u.get('apellido', '')}".strip(): u["id"]
             for u in usuarios_atento
         }
-        # Pre-seleccionar al usuario actual
         mi_nombre = f"{usuario['nombre']} {usuario.get('apellido', '')}".strip()
         default_atento = [mi_nombre] if mi_nombre in usuario_opciones else []
 
@@ -145,13 +164,11 @@ def show(usuario: dict):
         )
         asistentes_atento_ids = [usuario_opciones[s] for s in sel_atento]
 
-    # ── Formulario nuevo contacto (inline) ──────────────────
-    nuevo_contacto_id = None
     if st.session_state.get("nuevo_contacto_mode"):
-        nuevo_contacto_id = _form_nuevo_contacto(cliente_sel["id"], sb)
+        _form_nuevo_contacto(cliente_sel["id"], sb)
 
     # ══════════════════════════════════════════════════════════
-    # SECCIÓN 3: Observaciones y notas
+    # SECCIÓN 3: Observaciones
     # ══════════════════════════════════════════════════════════
     st.markdown("---")
     st.markdown("### 📝 Notas de la reunión")
@@ -167,7 +184,6 @@ def show(usuario: dict):
     st.markdown("---")
     st.markdown("### 📋 Items de seguimiento")
     st.caption("Registrá pedidos, reclamos y reconocimientos con su estado y responsable.")
-
     _seccion_items()
 
     # ══════════════════════════════════════════════════════════
@@ -203,31 +219,34 @@ def show(usuario: dict):
 
 # ── Formulario nuevo contacto ────────────────────────────────
 
-def _form_nuevo_contacto(cliente_id: str, sb) -> str | None:
+def _form_nuevo_contacto(cliente_id: str, sb):
     with st.expander("✏️ Nuevo contacto del cliente", expanded=True):
         st.markdown("**Datos profesionales**")
         col1, col2, col3 = st.columns(3)
         with col1:
-            nc_nombre   = st.text_input("Nombre *", key="nc_nombre")
-            nc_cargo    = st.text_input("Cargo", key="nc_cargo")
-            nc_email    = st.text_input("Email", key="nc_email")
+            nc_nombre   = st.text_input("Nombre *",  key="nc_nombre")
+            nc_cargo    = st.text_input("Cargo",      key="nc_cargo")
+            nc_email    = st.text_input("Email",      key="nc_email")
         with col2:
             nc_apellido = st.text_input("Apellido *", key="nc_apellido")
-            nc_area     = st.text_input("Área", key="nc_area")
-            nc_movil    = st.text_input("Móvil", key="nc_movil")
+            nc_area     = st.text_input("Área",       key="nc_area")
+            nc_movil    = st.text_input("Móvil",      key="nc_movil")
 
         st.markdown("**Datos personales (para atención y presentes)**")
         col3, col4 = st.columns(2)
         with col3:
-            nc_fnac     = st.date_input("Fecha de nacimiento", value=None, key="nc_fnac")
-            nc_localidad = st.text_input("Localidad", key="nc_localidad")
-            nc_intereses = st.text_input("Intereses", key="nc_intereses")
-            nc_hobbies  = st.text_input("Hobbies", key="nc_hobbies")
+            nc_fnac = st.date_input(
+                "Fecha de nacimiento", value=None, key="nc_fnac",
+                min_value=date(1930, 1, 1), max_value=date.today()
+            )
+            nc_localidad = st.text_input("Localidad",  key="nc_localidad")
+            nc_intereses = st.text_input("Intereses",  key="nc_intereses")
+            nc_hobbies   = st.text_input("Hobbies",    key="nc_hobbies")
         with col4:
-            nc_musica   = st.text_input("Música", key="nc_musica")
+            nc_musica   = st.text_input("Música",          key="nc_musica")
             nc_comida   = st.text_input("Comida favorita", key="nc_comida")
-            nc_alcohol  = st.text_input("Bebida / alcohol", key="nc_alcohol")
-            nc_deportes = st.text_input("Deportes", key="nc_deportes")
+            nc_alcohol  = st.text_input("Bebida / alcohol",key="nc_alcohol")
+            nc_deportes = st.text_input("Deportes",        key="nc_deportes")
 
         nc_notas = st.text_area("Notas personales adicionales", key="nc_notas", height=60)
 
@@ -240,13 +259,17 @@ def _form_nuevo_contacto(cliente_id: str, sb) -> str | None:
                     nuevo = {
                         "cliente_id": cliente_id,
                         "nombre": nc_nombre, "apellido": nc_apellido,
-                        "cargo": nc_cargo, "area": nc_area,
-                        "email": nc_email, "movil": nc_movil,
+                        "cargo": nc_cargo or None, "area": nc_area or None,
+                        "email": nc_email or None, "movil": nc_movil or None,
                         "fecha_nacimiento": str(nc_fnac) if nc_fnac else None,
-                        "localidad": nc_localidad, "intereses": nc_intereses,
-                        "hobbies": nc_hobbies, "musica": nc_musica,
-                        "comida": nc_comida, "bebida_alcohol": nc_alcohol,
-                        "deportes": nc_deportes, "notas_personales": nc_notas,
+                        "localidad": nc_localidad or None,
+                        "intereses": nc_intereses or None,
+                        "hobbies": nc_hobbies or None,
+                        "musica": nc_musica or None,
+                        "comida": nc_comida or None,
+                        "bebida_alcohol": nc_alcohol or None,
+                        "deportes": nc_deportes or None,
+                        "notas_personales": nc_notas or None,
                     }
                     result = sb.table("contactos_cliente").insert(nuevo).execute()
                     if result.data:
@@ -257,17 +280,15 @@ def _form_nuevo_contacto(cliente_id: str, sb) -> str | None:
             if st.button("Cancelar"):
                 st.session_state.nuevo_contacto_mode = False
                 st.rerun()
-    return None
 
 
 # ── Sección items de seguimiento ─────────────────────────────
 
 def _seccion_items():
-    TIPOS = ["pedido", "reclamo", "reconocimiento"]
-    ICONOS = {"pedido": "📌", "reclamo": "⚠️", "reconocimiento": "🏆"}
+    TIPOS   = ["pedido", "reclamo", "reconocimiento"]
+    ICONOS  = {"pedido": "📌", "reclamo": "⚠️", "reconocimiento": "🏆"}
     ESTADOS = ["pendiente", "en_curso", "resuelto"]
 
-    # Mostrar items ya agregados
     for i, item in enumerate(st.session_state.form_items):
         with st.container(border=True):
             col1, col2, col3, col4, col5 = st.columns([1.2, 2.5, 1.2, 1.5, 0.5])
@@ -293,20 +314,16 @@ def _seccion_items():
                     st.session_state.form_items.pop(i)
                     st.rerun()
 
-            # Fecha compromiso
             fc = st.date_input("Fecha compromiso (opcional)", value=None,
-                                key=f"item_fc_{i}", min_value=date.today())
+                               key=f"item_fc_{i}", min_value=date.today())
             st.session_state.form_items[i]["fecha_compromiso"] = str(fc) if fc else None
 
-    # Botón agregar nuevo item
-    col_a, col_b = st.columns([1, 4])
+    col_a, _ = st.columns([1, 4])
     with col_a:
         if st.button("➕ Agregar item", type="secondary"):
             st.session_state.form_items.append({
-                "tipo": "pedido",
-                "descripcion": "",
-                "estado": "pendiente",
-                "responsable": "",
+                "tipo": "pedido", "descripcion": "",
+                "estado": "pendiente", "responsable": "",
                 "fecha_compromiso": None,
             })
             st.rerun()
@@ -315,15 +332,13 @@ def _seccion_items():
 # ── Sección adjuntos ─────────────────────────────────────────
 
 def _seccion_adjuntos():
-    # Links
     st.markdown("**Links (URLs)**")
-    for i, adj in enumerate(
-        [a for a in st.session_state.form_adjuntos if a["tipo"] == "link"]
-    ):
+    links = [a for a in st.session_state.form_adjuntos if a["tipo"] == "link"]
+    for adj in links:
         idx = st.session_state.form_adjuntos.index(adj)
         col1, col2, col3 = st.columns([2, 3, 0.5])
         with col1:
-            nombre = st.text_input("Nombre/etiqueta", value=adj["nombre"], key=f"adj_nombre_{idx}")
+            nombre = st.text_input("Etiqueta", value=adj["nombre"], key=f"adj_nombre_{idx}")
             st.session_state.form_adjuntos[idx]["nombre"] = nombre
         with col2:
             url = st.text_input("URL", value=adj["url"], key=f"adj_url_{idx}")
@@ -338,44 +353,41 @@ def _seccion_adjuntos():
         st.session_state.form_adjuntos.append({"tipo": "link", "nombre": "", "url": "", "storage_path": None})
         st.rerun()
 
-    # Archivos
     st.markdown("**Archivos**")
     uploaded_files = st.file_uploader(
-        "Subir archivos (PDF, PPT, Word, imágenes)",
+        "Subir archivos",
         accept_multiple_files=True,
-        type=["pdf", "ppt", "pptx", "doc", "docx", "png", "jpg", "jpeg", "gif"],
-        key="file_uploader"
+        type=["pdf", "ppt", "pptx", "doc", "docx", "png", "jpg", "jpeg", "gif", "msg", "eml", "txt", "xlsx", "xls"],
+        key="file_uploader",
+        help="PDF, PPT, Word, imágenes, emails (.msg, .eml), Excel"
     )
     if uploaded_files:
-        st.caption(f"{len(uploaded_files)} archivo(s) listo(s) para subir al guardar.")
-        # Se subirán al guardar la reunión
+        st.caption(f"✅ {len(uploaded_files)} archivo(s) listos para subir al guardar.")
         st.session_state["pending_files"] = uploaded_files
     else:
         st.session_state["pending_files"] = []
 
 
-# ── Guardar reunión completa ─────────────────────────────────
+# ── Guardar reunión ──────────────────────────────────────────
 
 def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                      tipo_reunion, calificacion, observaciones,
                      asistentes_cliente_ids, asistentes_atento_ids):
 
-    # Validaciones básicas
     if not cliente_id or not fecha or not tipo_reunion:
         st.error("Completá los campos obligatorios: Cliente, Fecha y Tipo de reunión.")
         return
 
     with st.spinner("Guardando reunión..."):
         try:
-            # 1. Insertar reunión
             reunion_data = {
-                "cliente_id": cliente_id,
-                "programa_id": programa_id,
-                "fecha": str(fecha),
-                "hora": str(hora) if hora else None,
-                "tipo_reunion": tipo_reunion,
-                "calificacion": calificacion,
-                "observaciones": observaciones,
+                "cliente_id":      cliente_id,
+                "programa_id":     programa_id,
+                "fecha":           str(fecha),
+                "hora":            str(hora) if hora else None,
+                "tipo_reunion":    tipo_reunion,
+                "calificacion":    calificacion,
+                "observaciones":   observaciones,
                 "usuario_carga_id": usuario_id,
             }
             res = sb.table("reuniones").insert(reunion_data).execute()
@@ -384,43 +396,37 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                 return
             reunion_id = res.data[0]["id"]
 
-            # 2. Asistentes cliente
             for c_id in asistentes_cliente_ids:
-                sb.table("reunion_asistentes_cliente").insert({
-                    "reunion_id": reunion_id, "contacto_id": c_id
-                }).execute()
+                sb.table("reunion_asistentes_cliente").insert(
+                    {"reunion_id": reunion_id, "contacto_id": c_id}
+                ).execute()
 
-            # 3. Asistentes Atento
             for u_id in asistentes_atento_ids:
-                sb.table("reunion_asistentes_atento").insert({
-                    "reunion_id": reunion_id, "usuario_id": u_id
-                }).execute()
+                sb.table("reunion_asistentes_atento").insert(
+                    {"reunion_id": reunion_id, "usuario_id": u_id}
+                ).execute()
 
-            # 4. Items de seguimiento
             for item in st.session_state.form_items:
                 if item.get("descripcion"):
                     sb.table("items_seguimiento").insert({
-                        "reunion_id": reunion_id,
-                        "tipo": item["tipo"],
-                        "descripcion": item["descripcion"],
-                        "estado": item["estado"],
-                        "responsable": item.get("responsable") or None,
+                        "reunion_id":       reunion_id,
+                        "tipo":             item["tipo"],
+                        "descripcion":      item["descripcion"],
+                        "estado":           item["estado"],
+                        "responsable":      item.get("responsable") or None,
                         "fecha_compromiso": item.get("fecha_compromiso"),
                     }).execute()
 
-            # 5. Adjuntos links
             for adj in st.session_state.form_adjuntos:
                 if adj.get("url"):
                     sb.table("adjuntos").insert({
                         "reunion_id": reunion_id,
-                        "tipo": "link",
-                        "nombre": adj.get("nombre") or adj["url"],
-                        "url": adj["url"],
+                        "tipo":       "link",
+                        "nombre":     adj.get("nombre") or adj["url"],
+                        "url":        adj["url"],
                     }).execute()
 
-            # 6. Archivos subidos a Supabase Storage
-            pending_files = st.session_state.get("pending_files", [])
-            for f in pending_files:
+            for f in st.session_state.get("pending_files", []):
                 try:
                     file_bytes = f.read()
                     path = f"reuniones/{reunion_id}/{f.name}"
@@ -428,24 +434,23 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                         path, file_bytes,
                         file_options={"content-type": f.type or "application/octet-stream"}
                     )
-                    # URL firmada temporal
-                    signed = sb.storage.from_("adjuntos-reuniones").create_signed_url(path, 86400)
+                    signed = sb.storage.from_("adjuntos-reuniones").create_signed_url(path, 86400 * 30)
                     sb.table("adjuntos").insert({
-                        "reunion_id": reunion_id,
-                        "tipo": "archivo",
-                        "nombre": f.name,
-                        "storage_path": path,
-                        "url": signed.get("signedURL", ""),
+                        "reunion_id":    reunion_id,
+                        "tipo":          "archivo",
+                        "nombre":        f.name,
+                        "storage_path":  path,
+                        "url":           signed.get("signedURL", ""),
                     }).execute()
                 except Exception as e:
-                    st.warning(f"No se pudo subir el archivo {f.name}: {e}")
+                    st.warning(f"No se pudo subir {f.name}: {e}")
 
             # Limpiar estado
-            st.session_state.form_items = []
+            st.session_state.form_items   = []
             st.session_state.form_adjuntos = []
             st.session_state.pending_files = []
 
-            st.success(f"✅ Reunión guardada correctamente (ID: {reunion_id[:8]}...)")
+            st.success(f"✅ Reunión guardada correctamente.")
             st.balloons()
 
         except Exception as e:

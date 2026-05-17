@@ -55,57 +55,64 @@ def show(usuario: dict):
             st.divider()
 
         st.markdown("#### ✅ Usuarios activos")
+        todos_clientes = sb.table("clientes").select("id, nombre").eq("activo", True).order("nombre").execute().data
+
         for u in activos:
-            if u["id"] == usuario["id"]:
-                st.markdown(f"**{u['nombre']} {u.get('apellido','')}** · {u['email']} · `{u['rol']}` _(vos)_")
-                continue
-
-            with st.expander(f"👤 {u['nombre']} {u.get('apellido','')} · {u['email']} · `{u['rol']}`"):
-                col1, col2, col3 = st.columns([2, 2, 1])
-
+            es_yo = u["id"] == usuario["id"]
+            label = f"👤 {u['nombre']} {u.get('apellido','')} · {u['email']} · {u['rol']}" + (" (vos)" if es_yo else "")
+            with st.expander(label):
+                st.markdown("**Datos del usuario**")
+                col1, col2, col3 = st.columns(3)
                 with col1:
-                    # Cambiar rol
-                    nuevo_rol = st.selectbox("Rol", ["operador", "admin"],
-                                             index=0 if u["rol"] == "operador" else 1,
-                                             key=f"rol_{u['id']}")
-                    if nuevo_rol != u["rol"]:
-                        if st.button("Guardar rol", key=f"save_rol_{u['id']}"):
-                            sb.table("usuarios_atento").update({"rol": nuevo_rol})\
-                                .eq("id", u["id"]).execute()
-                            st.rerun()
-
+                    ed_nombre   = st.text_input("Nombre",   value=u.get("nombre",""),   key=f"ed_nom_{u['id']}")
+                    ed_email    = st.text_input("Email",    value=u.get("email",""),    key=f"ed_email_{u['id']}")
                 with col2:
-                    # Clientes asignados
-                    st.markdown("**Clientes asignados**")
-                    todos_clientes = sb.table("clientes").select("id, nombre")\
-                        .eq("activo", True).order("nombre").execute().data
-                    accesos = sb.table("accesos_usuarios")\
-                        .select("cliente_id").eq("usuario_id", u["id"]).execute().data
-                    ids_asignados = [a["cliente_id"] for a in accesos]
+                    ed_apellido = st.text_input("Apellido", value=u.get("apellido",""), key=f"ed_ape_{u['id']}")
+                    ed_rol      = st.selectbox("Rol", ["operador","admin"],
+                                               index=0 if u.get("rol")=="operador" else 1,
+                                               key=f"ed_rol_{u['id']}",
+                                               disabled=es_yo)
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("💾 Guardar datos", key=f"save_datos_{u['id']}", type="primary"):
+                        sb.table("usuarios_atento").update({
+                            "nombre":   ed_nombre,
+                            "apellido": ed_apellido,
+                            "email":    ed_email.strip().lower(),
+                            "rol":      ed_rol,
+                        }).eq("id", u["id"]).execute()
+                        st.success("Datos actualizados.")
+                        st.rerun()
 
+                st.divider()
+                col_acc, col_acc2 = st.columns([3, 1])
+                with col_acc:
+                    st.markdown("**Clientes asignados**")
+                    accesos = sb.table("accesos_usuarios").select("cliente_id").eq("usuario_id", u["id"]).execute().data
+                    ids_asignados = [a["cliente_id"] for a in accesos]
                     cli_seleccionados = st.multiselect(
                         "Clientes",
                         [c["nombre"] for c in todos_clientes],
                         default=[c["nombre"] for c in todos_clientes if c["id"] in ids_asignados],
                         key=f"clientes_{u['id']}"
                     )
-                    if st.button("Guardar accesos", key=f"save_acc_{u['id']}"):
-                        # Borrar accesos existentes y recrear
+                with col_acc2:
+                    st.markdown("<br><br>", unsafe_allow_html=True)
+                    if st.button("💾 Guardar accesos", key=f"save_acc_{u['id']}"):
                         sb.table("accesos_usuarios").delete().eq("usuario_id", u["id"]).execute()
-                        nuevos_ids = [c["id"] for c in todos_clientes if c["nombre"] in cli_seleccionados]
-                        for cli_id in nuevos_ids:
-                            sb.table("accesos_usuarios").insert({
-                                "usuario_id": u["id"], "cliente_id": cli_id
-                            }).execute()
+                        for cli_id in [c["id"] for c in todos_clientes if c["nombre"] in cli_seleccionados]:
+                            sb.table("accesos_usuarios").insert({"usuario_id": u["id"], "cliente_id": cli_id}).execute()
                         st.success("Accesos actualizados.")
                         st.rerun()
 
-                with col3:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("🔴 Desactivar", key=f"desact_{u['id']}"):
-                        sb.table("usuarios_atento").update({"activo": False})\
-                            .eq("id", u["id"]).execute()
-                        st.rerun()
+                if not es_yo:
+                    st.divider()
+                    col_on, _ = st.columns([1, 4])
+                    with col_on:
+                        lbl = "🔴 Desactivar" if u["activo"] else "🟢 Activar"
+                        if st.button(lbl, key=f"toggle_{u['id']}"):
+                            sb.table("usuarios_atento").update({"activo": not u["activo"]}).eq("id", u["id"]).execute()
+                            st.rerun()
 
     # ══════════════════════════════════════════════════════════
     # TAB 2: CLIENTES

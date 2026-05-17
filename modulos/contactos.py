@@ -187,7 +187,7 @@ def _form_contacto(sb, clientes: list, contacto_existente: dict | None):
                 fnac_default = date.fromisoformat(c["fecha_nacimiento"]) if c.get("fecha_nacimiento") else None
             except Exception:
                 fnac_default = None
-            fnac        = st.date_input("Fecha de nacimiento", value=fnac_default)
+            fnac        = st.date_input("Fecha de nacimiento", value=fnac_default, min_value=date(1930,1,1), max_value=date.today())
             localidad   = st.text_input("Localidad", value=c.get("localidad", "") or "")
             intereses   = st.text_input("Intereses", value=c.get("intereses", "") or "")
             hobbies     = st.text_input("Hobbies", value=c.get("hobbies", "") or "")
