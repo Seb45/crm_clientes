@@ -443,11 +443,14 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
             for f in st.session_state.get("pending_files", []):
                 try:
                     import requests as req
+                    import urllib.parse
                     file_bytes = f.read()
-                    path = f"reuniones/{reunion_id}/{f.name}"
+                    # Limpiar nombre de archivo: reemplazar espacios y chars problemáticos
+                    safe_name = f.name.replace(" ", "_")
+                    path = f"reuniones/{reunion_id}/{safe_name}"
                     supabase_url = st.secrets["SUPABASE_URL"]
                     service_key  = st.secrets["SUPABASE_SERVICE_KEY"]
-                    # Upload via REST directo con service key
+                    # Upload via PUT con service key
                     upload_url = f"{supabase_url}/storage/v1/object/adjuntos-reuniones/{path}"
                     headers = {
                         "Authorization": f"Bearer {service_key}",
@@ -455,12 +458,10 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
                         "Content-Type": f.type or "application/octet-stream",
                         "x-upsert": "true",
                     }
-                    resp = req.post(upload_url, headers=headers, data=file_bytes, timeout=60)
-                    st.info(f"DEBUG upload → URL: {upload_url} | status: {resp.status_code} | resp: {resp.text[:200]}")
+                    resp = req.put(upload_url, headers=headers, data=file_bytes, timeout=60)
                     if resp.status_code not in (200, 201):
-                        st.warning(f"No se pudo subir {f.name}: {resp.text[:200]}")
+                        st.warning(f"No se pudo subir {f.name} (status {resp.status_code}): {resp.text[:200]}")
                         continue
-                    # URL pública directa (bucket público)
                     public_url = f"{supabase_url}/storage/v1/object/public/adjuntos-reuniones/{path}"
                     sb.table("adjuntos").insert({
                         "reunion_id":   reunion_id,
