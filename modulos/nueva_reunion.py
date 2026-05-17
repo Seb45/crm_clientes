@@ -390,8 +390,17 @@ def _seccion_adjuntos(cliente_nombre: str = ""):
         st.rerun()
 
     st.markdown("**Archivos**")
-    st.info("📁 Subí el archivo a la carpeta del cliente en SharePoint y pegá el link arriba. El acceso queda controlado por los permisos de Microsoft 365.")
-    st.session_state["pending_files"] = []
+    uploaded_files = st.file_uploader(
+        "Subir archivos (PDF, PPT, Word, Excel, imágenes, emails)",
+        accept_multiple_files=True,
+        type=["pdf","ppt","pptx","doc","docx","png","jpg","jpeg","gif","msg","eml","txt","xlsx","xls"],
+        key="file_uploader"
+    )
+    if uploaded_files:
+        st.caption(f"✅ {len(uploaded_files)} archivo(s) listos para subir al guardar.")
+        st.session_state["pending_files"] = uploaded_files
+    else:
+        st.session_state["pending_files"] = []
 
 
 # ── Guardar reunión ──────────────────────────────────────────
@@ -455,33 +464,50 @@ def _guardar_reunion(sb, usuario_id, cliente_id, programa_id, fecha, hora,
             for f in st.session_state.get("pending_files", []):
                 try:
                     import requests as req
-                    import urllib.parse
+                    from supabase import create_client
                     file_bytes = f.read()
-                    # Limpiar nombre de archivo: reemplazar espacios y chars problemáticos
-                    safe_name = f.name.replace(" ", "_")
-                    path = f"reuniones/{reunion_id}/{safe_name}"
+                    safe_name  = f.name.replace(" ", "_")
+                    path       = f"reuniones/{reunion_id}/{safe_name}"
                     supabase_url = st.secrets["SUPABASE_URL"]
+                    anon_key     = st.secrets["SUPABASE_ANON_KEY"]
                     service_key  = st.secrets["SUPABASE_SERVICE_KEY"]
-                    # Upload via PUT con service key
+
+                    # Upload via anon key (bucket público — funciona sin RLS)
                     upload_url = f"{supabase_url}/storage/v1/object/adjuntos-reuniones/{path}"
-                    headers = {
-                        "Authorization": f"Bearer {service_key}",
-                        "apikey": service_key,
-                        "Content-Type": f.type or "application/octet-stream",
-                        "x-upsert": "true",
-                    }
-                    resp = req.put(upload_url, headers=headers, data=file_bytes, timeout=60)
+                    resp = req.post(upload_url, headers={
+                        "Authorization": f"Bearer {anon_key}",
+                        "apikey":        anon_key,
+                        "Content-Type":  f.type or "application/octet-stream",
+                        "x-upsert":      "true",
+                    }, data=file_bytes, timeout=60)
+
                     if resp.status_code not in (200, 201):
-                        st.warning(f"No se pudo subir {f.name} (status {resp.status_code}): {resp.text[:200]}")
+                        st.warning(f"No se pudo subir {f.name} ({resp.status_code}): {resp.text[:150]}")
                         continue
+
+                    # URL pública directa
                     public_url = f"{supabase_url}/storage/v1/object/public/adjuntos-reuniones/{path}"
-                    sb.table("adjuntos").insert({
-                        "reunion_id":   reunion_id,
-                        "tipo":         "archivo",
-                        "nombre":       f.name,
-                        "storage_path": path,
-                        "url":          public_url,
-                    }).execute()
+
+                    # Insertar en tabla adjuntos usando service key directamente via REST
+                    ins = req.post(
+                        f"{supabase_url}/rest/v1/adjuntos",
+                        headers={
+                            "Authorization": f"Bearer {service_key}",
+                            "apikey":        service_key,
+                            "Content-Type":  "application/json",
+                            "Prefer":        "return=minimal",
+                        },
+                        json={
+                            "reunion_id":   reunion_id,
+                            "tipo":         "archivo",
+                            "nombre":       f.name,
+                            "storage_path": path,
+                            "url":          public_url,
+                        },
+                        timeout=10
+                    )
+                    if ins.status_code not in (200, 201):
+                        st.warning(f"Archivo subido pero no registrado: {ins.text[:100]}")
                 except Exception as e:
                     st.warning(f"No se pudo subir {f.name}: {e}")
 

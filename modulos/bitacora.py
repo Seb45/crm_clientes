@@ -256,10 +256,29 @@ def _mostrar_detalle(sb, reunion_id: str, r: dict):
             st.info("No hay adjuntos en esta reunión.")
         else:
             for adj in adjuntos:
-                col1, col2 = st.columns([4, 1])
+                col1, col2, col3 = st.columns([4, 1, 1])
                 with col1:
                     icono = "🔗" if adj["tipo"] == "link" else "📄"
                     st.markdown(f"{icono} **{adj['nombre']}**")
                 with col2:
                     if adj.get("url"):
-                        st.link_button("Abrir", adj["url"])
+                        st.link_button("🔗 Abrir", adj["url"])
+                with col3:
+                    # Botón de descarga para archivos de Supabase Storage
+                    if adj["tipo"] == "archivo" and adj.get("storage_path"):
+                        try:
+                            import requests as req
+                            supabase_url = st.secrets["SUPABASE_URL"]
+                            anon_key     = st.secrets["SUPABASE_ANON_KEY"]
+                            dl_url = f"{supabase_url}/storage/v1/object/adjuntos-reuniones/{adj['storage_path']}"
+                            r = req.get(dl_url, headers={"apikey": anon_key}, timeout=15)
+                            if r.status_code == 200:
+                                st.download_button(
+                                    "⬇️ Bajar",
+                                    data=r.content,
+                                    file_name=adj["nombre"],
+                                    mime=r.headers.get("content-type","application/octet-stream"),
+                                    key=f"dl_{adj['id']}"
+                                )
+                        except Exception:
+                            pass
