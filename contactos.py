@@ -3,6 +3,9 @@ pages/contactos.py
 ABM de contactos de clientes con datos relacionales
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 from datetime import date
 from utils.supabase_client import get_supabase, get_clientes_usuario

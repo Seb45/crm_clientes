@@ -3,6 +3,9 @@ pages/pendientes.py
 Vista consolidada de todos los items de seguimiento pendientes/en curso
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 import pandas as pd
 from datetime import date

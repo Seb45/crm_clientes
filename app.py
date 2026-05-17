@@ -3,6 +3,10 @@ app.py — Punto de entrada principal
 Bitácora de Seguimiento · Atento
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(__file__))
+
 import streamlit as st
 from utils.auth import require_auth, login_page
 from utils.supabase_client import init_session, logout, is_admin

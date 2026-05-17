@@ -3,6 +3,9 @@ pages/dashboard.py
 Dashboard principal: alertas + últimas reuniones + pendientes
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta

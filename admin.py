@@ -3,6 +3,9 @@ pages/admin.py
 Panel de administración: usuarios, roles, permisos por cliente
 """
 
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 import streamlit as st
 from utils.supabase_client import get_supabase
 
